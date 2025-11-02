@@ -1,0 +1,907 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>In Tra(i)nslation — Prototyping Tools</title>
+
+  <!-- Fonts & icons -->
+  <link href="https://fonts.googleapis.com/css2?family=Inria+Sans:wght@300;400;600;700&family=Julius+Sans+One&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" />
+
+  <style>
+    :root{
+      --bg:#0b1220;
+      --card:#07111b;
+      --accent:#9EFA1E; /* neon geelgroen */
+      --text:#ffffff;
+      --muted:#aab7c7;
+      --gap:18px;
+      --easing: cubic-bezier(.2,.8,.2,1);
+      --max-screen-width: 1400px;
+      --frame-padding: 22px;
+    }
+
+    /* reset */
+    *{box-sizing:border-box;margin:0;padding:0}
+    html,body{height:100%}
+    body{
+      font-family:"Inria Sans",sans-serif;
+      background:linear-gradient(180deg,#06101a 0%,#07111b 100%);
+      color:var(--text);
+      overflow:hidden;
+      -webkit-font-smoothing:antialiased;
+      -moz-osx-font-smoothing:grayscale;
+      position:relative;
+    }
+
+    /* App wrapper */
+    .app {
+      position:absolute;
+      inset:0;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:28px;
+    }
+
+    /* Page sections (soft crossfade) */
+    section.page {
+      position:absolute;
+      inset:0;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:flex-start;
+      padding:28px;
+      gap:18px;
+      opacity:0;
+      pointer-events:none;
+      transform: translateY(8px);
+      transition: opacity 420ms var(--easing), transform 420ms var(--easing);
+    }
+    section.page.active{
+      opacity:1;
+      pointer-events:auto;
+      transform: translateY(0);
+    }
+
+    /* Titles & lead text */
+    .title {
+      font-family:"Julius Sans One",sans-serif;
+      font-size: clamp(1.75rem, 3.5vw, 3.6rem);
+      color:var(--accent);
+      letter-spacing:0.02em;
+      text-align:center;
+    }
+    .lead {
+      max-width:1100px;
+      color:var(--muted);
+      text-align:center;
+      line-height:1.5;
+      font-size:clamp(1rem,1.6vw,1.2rem);
+    }
+
+    /* Buttons */
+    .btn-row { display:flex; gap:12px; flex-wrap:wrap; justify-content:center; margin-top:6px; }
+    .btn {
+      background:transparent;
+      border:2px solid var(--accent);
+      color:var(--accent);
+      padding:11px 18px;
+      border-radius:10px;
+      font-weight:700;
+      cursor:pointer;
+      transition: transform .12s ease, background .12s ease, color .12s ease;
+    }
+    .btn:hover{ transform: translateY(-3px); background:var(--accent); color:#03110a; }
+
+    .back {
+      position:absolute;
+      left:20px;
+      top:20px;
+      background:transparent;
+      border:2px solid rgba(255,255,255,0.06);
+      color:var(--muted);
+      padding:8px 12px;
+      border-radius:8px;
+      cursor:pointer;
+    }
+    .back:hover{ color:var(--accent); border-color:var(--accent) }
+
+    /* frame: contains your embedded screens, responsive but bounded */
+    .frame {
+      width: min(var(--max-screen-width), 94vw);
+      height: calc(100vh - 220px);
+      border-radius:14px;
+      overflow:auto;
+      background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.06));
+      box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+      padding:var(--frame-padding);
+      display:flex;
+      justify-content:center;
+      align-items:flex-start;
+    }
+
+    /* inner screen wrapper keeps original proportions while scaling */
+    .screen-inner {
+      width:100%;
+      max-width: var(--max-screen-width);
+      margin:0 auto;
+      min-height: calc(100% - 36px);
+    }
+
+    /* Embedded specific baseline */
+    .embedded { font-family:"Inria Sans",sans-serif; color:var(--text); }
+
+    /* Custom cursor */
+    .cursor {
+      position: fixed;
+      left: 0; top: 0;
+      width: 20px; height: 20px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 24px rgba(158,250,30,0.95);
+      pointer-events: none;
+      transform: translate(-50%, -50%) scale(1);
+      transition: transform .09s linear;
+      z-index: 9999;
+      mix-blend-mode: difference;
+    }
+    .cursor.hover{ transform: translate(-50%,-50%) scale(1.9); }
+
+    .muted { color:var(--muted); }
+    .center { text-align:center; }
+
+    /* -----------------------
+       ONDERZOEK: slideshow
+       ----------------------- */
+    .slideshow-wrap {
+      width:100%;
+      max-width:1000px;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      gap:14px;
+    }
+
+    .photo-frame {
+      width:100%;
+      background: #090b0d;
+      border-radius:12px;
+      box-shadow: 0 18px 60px rgba(0,0,0,0.6);
+      padding:12px;
+      display:flex;
+      justify-content:center;
+      align-items:center;
+      position:relative;
+    }
+
+    .photo {
+      width:100%;
+      height: min(70vh, 720px);
+      background:#111;
+      border-radius:8px;
+      overflow:hidden;
+      display:flex;
+      justify-content:center;
+      align-items:center;
+    }
+
+    .photo img {
+      max-width:100%;
+      max-height:100%;
+      object-fit:contain; /* keeps the image inside the nice frame */
+      display:block;
+      transition: opacity .35s ease, transform .45s var(--easing);
+      opacity:0;
+      transform: scale(1.02);
+      position:absolute;
+      left:50%;
+      top:50%;
+      transform-origin:center;
+      transform: translate(-50%,-50%) scale(1.02);
+    }
+    .photo img.visible {
+      opacity:1;
+      transform: translate(-50%,-50%) scale(1);
+      position:absolute;
+    }
+
+    .arrow {
+      position: absolute;
+      top:50%;
+      transform: translateY(-50%);
+      background: rgba(0,0,0,0.45);
+      border: 2px solid rgba(255,255,255,0.06);
+      color:var(--accent);
+      padding:10px 14px;
+      border-radius:10px;
+      cursor:pointer;
+      z-index:5;
+    }
+    .arrow:hover { background: rgba(0,0,0,0.6); color:#baff4a; }
+
+    .arrow.left { left:12px; }
+    .arrow.right { right:12px; }
+
+    .thumbs {
+      display:flex;
+      gap:8px;
+      overflow:auto;
+      padding:6px;
+      width:100%;
+      justify-content:center;
+    }
+
+    .thumbs button {
+      border:2px solid rgba(255,255,255,0.04);
+      background:transparent;
+      padding:4px;
+      border-radius:6px;
+      min-width:64px;
+      min-height:48px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      cursor:pointer;
+      transition: transform .12s ease, border-color .12s;
+    }
+    .thumbs button img {
+      width:100%;
+      height:100%;
+      object-fit:cover;
+      border-radius:4px;
+      display:block;
+    }
+    .thumbs button.active {
+      border-color: var(--accent);
+      transform: translateY(-6px);
+    }
+
+    .boek-controls {
+      display:flex;
+      gap:12px;
+      margin-top:6px;
+    }
+
+    .boek-controls .btn {
+      background: var(--accent);
+      color:#03110a;
+      border:none;
+      padding:10px 16px;
+    }
+
+    /* responsive tweaks */
+    @media (max-width:900px){
+      .frame { height: calc(100vh - 140px); padding:12px; }
+      .back{ left:12px; top:12px; padding:6px 10px; }
+      .title { font-size: clamp(1.4rem, 5vw, 2.6rem); }
+      .photo img { transition: opacity .25s ease; }
+      .photo { height: min(58vh, 520px); }
+      .thumbs button { min-width:52px; min-height:40px }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="cursor" id="cursorEl" aria-hidden="true"></div>
+
+  <div class="app">
+    <!-- HOME -->
+    <section id="home" class="page active" aria-label="Home">
+      <h1 class="title">In Tra(i)nslation</h1>
+      <p class="lead center">
+        Deze website werd gemaakt voor het vak <strong>Prototyping Tools</strong>.
+        Het project <em>In Tra(i)nslation</em> onderzoekt de beeldvorming en functionaliteit
+        van digitale treinschermen. Kies hieronder om door het proces (weken) of het onderzoek te bladeren.
+      </p>
+
+      <div class="btn-row">
+        <button class="btn" onclick="show('weeks')">Proces (Weken)</button>
+        <button class="btn" onclick="show('onderzoek')">Onderzoek</button>
+      </div>
+    </section>
+
+    <!-- ONDERZOEK -->
+    <section id="onderzoek" class="page" aria-label="Onderzoek">
+      <button class="back" onclick="show('home')">← Terug</button>
+      <h1 class="title">Onderzoek — Werkboek</h1>
+
+      <div class="frame">
+        <div class="screen-inner embedded">
+          <div class="slideshow-wrap" aria-live="polite">
+
+            <!-- photo frame -->
+            <div class="photo-frame" role="region" aria-label="Werkboek fotos">
+              <button class="arrow left" id="prevBtn" aria-label="Vorige (pijl)"><i class="fa-solid fa-chevron-left"></i></button>
+
+              <div class="photo" id="photoContainer">
+                <!-- images injected by JS; keep empty here -->
+              </div>
+
+              <button class="arrow right" id="nextBtn" aria-label="Volgende (pijl)"><i class="fa-solid fa-chevron-right"></i></button>
+            </div>
+
+            <!-- thumbnails -->
+            <div class="thumbs" id="thumbsContainer" aria-hidden="false"></div>
+
+            <!-- optional controls -->
+            <div class="boek-controls" style="justify-content:center">
+              <button class="btn" id="firstBtn">Cover</button>
+              <button class="btn" id="lastBtn">Laatste</button>
+            </div>
+
+            <p class="muted center" style="margin-top:8px">Gebruik pijltjestoetsen ← → of klik op de thumbnails om te navigeren.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- WEEKS OVERVIEW -->
+    <section id="weeks" class="page" aria-label="Weken overzicht">
+      <button class="back" onclick="show('home')">← Terug</button>
+      <h1 class="title">Overzicht — Weken</h1>
+      <p class="lead center">Dupliceer en vul voor elke week een eigen pagina. Hieronder links naar Week 1 t/m Week 6.</p>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;width:min(1000px,92%);margin-top:18px">
+        <button class="btn" onclick="show('week1')">Week 1</button>
+        <button class="btn" onclick="show('week2')">Week 2</button>
+        <button class="btn" onclick="show('week3')">Week 3</button>
+        <button class="btn" onclick="show('week4')">Week 4</button>
+        <button class="btn" onclick="show('week5')">Week 5</button>
+        <button class="btn" onclick="show('week6')">Week 6</button>
+      </div>
+    </section>
+
+    <!-- WEEK 1 -->
+    <section id="week1" class="page" aria-label="Week 1">
+      <button class="back" onclick="show('weeks')">← Terug</button>
+      <h1 class="title">Week 1 — Treinschermen</h1>
+      <p class="lead center">Klik op één van de drie schermen om de volledige weergave te openen.</p>
+
+      <div class="btn-row" style="margin-top:8px;">
+        <button class="btn" onclick="show('screen1')">Scherm 1</button>
+        <button class="btn" onclick="show('screen2')">Scherm 2</button>
+        <button class="btn" onclick="show('screen3')">Scherm 3</button>
+      </div>
+    </section>
+
+    <!-- Placeholder weeks -->
+    <section id="week2" class="page"><button class="back" onclick="show('weeks')">← Terug</button><h1 class="title">Week 2</h1><div class="frame"><div class="screen-inner embedded"><p class="muted">Week 2 - inhoud hier.</p></div></div></section>
+    <section id="week3" class="page"><button class="back" onclick="show('weeks')">← Terug</button><h1 class="title">Week 3</h1><div class="frame"><div class="screen-inner embedded"><p class="muted">Week 3 - inhoud hier.</p></div></div></section>
+    <section id="week4" class="page"><button class="back" onclick="show('weeks')">← Terug</button><h1 class="title">Week 4</h1><div class="frame"><div class="screen-inner embedded"><p class="muted">Week 4 - inhoud hier.</p></div></div></section>
+    <section id="week5" class="page"><button class="back" onclick="show('weeks')">← Terug</button><h1 class="title">Week 5</h1><div class="frame"><div class="screen-inner embedded"><p class="muted">Week 5 - inhoud hier.</p></div></div></section>
+    <section id="week6" class="page"><button class="back" onclick="show('weeks')">← Terug</button><h1 class="title">Week 6</h1><div class="frame"><div class="screen-inner embedded"><p class="muted">Week 6 - inhoud hier.</p></div></div></section>
+
+    <!-- SCREENS (screen1 / screen2 / screen3) -->
+    <!-- Screen 1 -->
+    <section id="screen1" class="page" aria-label="Scherm 1 - Overzicht">
+      <button class="back" onclick="show('week1')">← Terug naar Week 1</button>
+      <div class="frame">
+        <div class="screen-inner embedded" style="padding:8px;">
+          <!-- inhoud Scherm 1 (compact, responsive) -->
+          <div style="width:100%;max-width:1100px;margin:0 auto;background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(0,0,0,0.06));border-radius:14px;padding:24px;box-shadow:0 10px 30px rgba(2,6,12,0.6);display:grid;grid-template-columns:1fr 360px;gap:var(--gap);">
+            <div style="padding:12px">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                <h2 style="font-family:'Julius Sans One';font-size:28px;margin:0;color:var(--accent);text-transform:uppercase">OVERZICHTSCHERM</h2>
+                <div class="screen-clock muted" data-screen="1" style="font-weight:700;font-size:18px;background:rgba(255,255,255,0.05);padding:8px 12px;border-radius:10px;color:var(--muted)">--:--</div>
+              </div>
+
+              <div style="display:flex;flex-direction:column;gap:10px;margin-top:12px">
+                <!-- rows -->
+                <article style="display:grid;grid-template-columns:110px 1fr 110px;gap:10px;align-items:center;padding:12px;border-radius:10px;background:rgba(255,255,255,0.03);">
+                  <div style="font-family:'Julius Sans One';font-size:24px;color:var(--text)">10:00</div>
+                  <div>
+                    <div style="font-weight:700;font-size:16px;color:var(--accent)">Bestemming IC23</div>
+                    <div style="font-size:13px;color:var(--muted)">Perron 4</div>
+                    <div class="status" style="margin-top:6px;font-size:13px;font-weight:600;display:inline-block;padding:4px 8px;border-radius:8px;background:rgba(158,250,30,0.08);color:var(--accent)">Op tijd</div>
+                  </div>
+                  <div style="text-align:right;font-size:16px;font-weight:700;color:var(--text)">Perron 4</div>
+                </article>
+                <!-- ... more rows (omitted for brevity, same as earlier) -->
+                <article style="display:grid;grid-template-columns:110px 1fr 110px;gap:10px;align-items:center;padding:12px;border-radius:10px;background:rgba(255,255,255,0.03);">
+                  <div style="font-family:'Julius Sans One';font-size:24px;color:var(--text)">10:24</div>
+                  <div>
+                    <div style="font-weight:700;font-size:16px;color:var(--accent)">Bestemming IC23</div>
+                    <div style="font-size:13px;color:var(--muted)">Perron 7</div>
+                    <div class="status" style="margin-top:6px;font-size:13px;font-weight:600;display:inline-block;padding:4px 8px;border-radius:8px;background:rgba(158,250,30,0.08);color:var(--accent)">Op tijd</div>
+                  </div>
+                  <div style="text-align:right;font-size:16px;font-weight:700;color:var(--text)">Perron 7</div>
+                </article>
+                <article style="display:grid;grid-template-columns:110px 1fr 110px;gap:10px;align-items:center;padding:12px;border-radius:10px;background:rgba(255,255,255,0.03);">
+                  <div style="font-family:'Julius Sans One';font-size:24px;color:var(--text)">10:40</div>
+                  <div>
+                    <div style="font-weight:700;font-size:16px;color:var(--accent)">Bestemming IC23</div>
+                    <div style="font-size:13px;color:var(--muted)">Perron 12</div>
+                    <div class="status" style="margin-top:6px;font-size:13px;font-weight:600;display:inline-block;padding:4px 8px;border-radius:8px;background:rgba(158,250,30,0.08);color:var(--accent)">Op tijd</div>
+                  </div>
+                  <div style="text-align:right;font-size:16px;font-weight:700;color:var(--text)">Perron 12</div>
+                </article>
+                <article style="display:grid;grid-template-columns:110px 1fr 110px;gap:10px;align-items:center;padding:12px;border-radius:10px;background:rgba(255,255,255,0.03);">
+                  <div style="font-family:'Julius Sans One';font-size:24px;color:var(--text)">11:12</div>
+                  <div>
+                    <div style="font-weight:700;font-size:16px;color:var(--accent)">Bestemming IC23</div>
+                    <div style="font-size:13px;color:var(--muted)">Perron 5</div>
+                    <div class="status" style="margin-top:6px;font-size:13px;font-weight:600;display:inline-block;padding:4px 8px;border-radius:8px;background:rgba(158,250,30,0.08);color:var(--accent)">Op tijd</div>
+                  </div>
+                  <div style="text-align:right;font-size:16px;font-weight:700;color:var(--text)">Perron 5</div>
+                </article>
+                <article style="display:grid;grid-template-columns:110px 1fr 110px;gap:10px;align-items:center;padding:12px;border-radius:10px;background:rgba(255,255,255,0.03);">
+                  <div style="font-family:'Julius Sans One';font-size:24px;color:var(--text)">11:24</div>
+                  <div>
+                    <div style="font-weight:700;font-size:16px;color:var(--accent)">Bestemming IC23</div>
+                    <div style="font-size:13px;color:var(--muted)">Perron 9</div>
+                    <div class="status" style="margin-top:6px;font-size:13px;font-weight:600;display:inline-block;padding:4px 8px;border-radius:8px;background:rgba(158,250,30,0.08);color:var(--accent)">Op tijd</div>
+                  </div>
+                  <div style="text-align:right;font-size:16px;font-weight:700;color:var(--text)">Perron 9</div>
+                </article>
+              </div>
+            </div>
+
+            <aside style="padding:12px;display:flex;flex-direction:column;gap:12px">
+              <div style="background:rgba(255,255,255,0.03);padding:12px;border-radius:10px">
+                <h3 style="font-family:'Julius Sans One';font-size:16px;margin:0 0 8px 0">Volgende vertrekken</h3>
+                <ul style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px">
+                  <li style="display:flex;justify-content:space-between"><span style="font-weight:700">10:00</span><span style="color:var(--accent)">IC23 — Perron 4</span></li>
+                  <li style="display:flex;justify-content:space-between"><span style="font-weight:700">10:24</span><span style="color:var(--accent)">IC23 — Perron 7</span></li>
+                  <li style="display:flex;justify-content:space-between"><span style="font-weight:700">10:40</span><span style="color:var(--accent)">IC23 — Perron 12</span></li>
+                  <li style="display:flex;justify-content:space-between"><span style="font-weight:700">11:12</span><span style="color:var(--accent)">IC23 — Perron 5</span></li>
+                  <li style="display:flex;justify-content:space-between"><span style="font-weight:700">11:24</span><span style="color:var(--accent)">IC23 — Perron 9</span></li>
+                </ul>
+              </div>
+
+              <div style="background:rgba(255,255,255,0.03);padding:12px;border-radius:10px">
+                <h3 style="font-family:'Julius Sans One';font-size:16px;margin:0 0 8px 0">Opmerkingen</h3>
+                <p style="margin:0;color:var(--muted);font-size:13px">
+                  Alle treinen IC23 vertrekken volgens schema. <br>
+                  Druk op <b>“R”</b> om vertragingen te simuleren (werkt alleen in dit scherm).
+                </p>
+              </div>
+            </aside>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Screen 2 and 3 (kept as in previous content) -->
+    <section id="screen2" class="page" aria-label="Scherm 2 - Perron">
+      <button class="back" onclick="show('week1')">← Terug naar Week 1</button>
+      <div class="frame">
+        <div class="screen-inner embedded" style="padding:8px">
+          <!-- START inhoud Scherm 2 -->
+          <div style="display:flex;gap:20px;align-items:flex-start;justify-content:center;flex-wrap:wrap">
+            <div style="writing-mode:vertical-rl;transform:rotate(180deg);font-family:'Julius Sans One';font-size:48px;letter-spacing:0.12em;color:var(--text);white-space:nowrap">PERRON 3</div>
+
+            <div style="flex:1;max-width:1100px">
+              <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:20px">
+                <div style="background:var(--accent);color:#000;border-radius:30px;padding:24px;display:flex;flex-direction:column;justify-content:space-between;box-shadow:0 6px 20px rgba(0,0,0,0.5)">
+                  <div>
+                    <div style="font-family:'Julius Sans One';font-size:44px;font-weight:700">10:00</div>
+                    <div style="font-family:'Julius Sans One';font-size:28px;margin-top:8px;text-transform:uppercase">LEUVEN</div>
+                    <div style="font-size:18px;margin-top:6px">IC 23</div>
+                    <p style="font-size:15px;color:#000;margin-top:8px">Tussenhaltes: Heverlee — Wijgmaal — Aarschot — Diest</p>
+                    <div style="margin-top:10px;font-size:18px;display:flex;gap:12px;color:#000">
+                      <i class="fa-solid fa-wheelchair" title="Rolstoeltoegankelijk"></i>
+                      <i class="fa-solid fa-restroom" title="WC aanwezig"></i>
+                      <i class="fa-solid fa-bicycle" title="Fietscoupé aanwezig"></i>
+                    </div>
+                  </div>
+                  <div style="font-size:22px;font-weight:700">OP TIJD</div>
+                </div>
+
+                <div style="background:var(--accent);color:#000;border-radius:30px;padding:24px;display:flex;flex-direction:column;justify-content:space-between;box-shadow:0 6px 20px rgba(0,0,0,0.5)">
+                  <div>
+                    <div style="font-family:'Julius Sans One';font-size:44px;font-weight:700">10:24</div>
+                    <div style="font-family:'Julius Sans One';font-size:28px;margin-top:8px;text-transform:uppercase">AARSCHOT</div>
+                    <div style="font-size:18px;margin-top:6px">ICE</div>
+                    <p style="font-size:15px;color:#000;margin-top:8px">Tussenhaltes: Herent — Wijgmaal — Holsbeek</p>
+                    <div style="margin-top:10px;font-size:18px;display:flex;gap:12px;color:#000">
+                      <i class="fa-solid fa-wheelchair" title="Rolstoeltoegankelijk"></i>
+                      <i class="fa-solid fa-restroom" title="WC aanwezig"></i>
+                      <i class="fa-solid fa-bicycle" title="Fietscoupé aanwezig"></i>
+                    </div>
+                  </div>
+                  <div style="font-size:22px;font-weight:700">+ 12'</div>
+                </div>
+
+                <!-- smaller tiles omitted for brevity; keep same structure as before -->
+                <div style="background:var(--accent);color:#000;border-radius:16px;padding:16px;display:flex;flex-direction:column;justify-content:space-between;box-shadow:0 6px 20px rgba(0,0,0,0.5)">
+                  <div><div style="font-family:'Julius Sans One';font-size:30px;font-weight:700">11:00</div><div style="font-family:'Julius Sans One';font-size:18px;margin-top:6px">LIER</div></div>
+                  <div style="font-size:18px;font-weight:700">+ 3'</div>
+                </div>
+
+                <div style="background:var(--accent);color:#000;border-radius:16px;padding:16px;display:flex;flex-direction:column;justify-content:space-between;box-shadow:0 6px 20px rgba(0,0,0,0.5)">
+                  <div><div style="font-family:'Julius Sans One';font-size:30px;font-weight:700">11:50</div><div style="font-family:'Julius Sans One';font-size:18px;margin-top:6px">LEUVEN</div></div>
+                  <div style="font-size:18px;font-weight:700">OP TIJD</div>
+                </div>
+
+                <div style="background:var(--accent);color:#000;border-radius:16px;padding:16px;display:flex;flex-direction:column;justify-content:space-between;box-shadow:0 6px 20px rgba(0,0,0,0.5)">
+                  <div><div style="font-family:'Julius Sans One';font-size:30px;font-weight:700">12:20</div><div style="font-family:'Julius Sans One';font-size:18px;margin-top:6px">TURNHOUT</div></div>
+                  <div style="font-size:18px;font-weight:700">OP TIJD</div>
+                </div>
+
+                <div style="background:var(--accent);color:#000;border-radius:16px;padding:16px;display:flex;flex-direction:column;justify-content:space-between;box-shadow:0 6px 20px rgba(0,0,0,0.5)">
+                  <div><div style="font-family:'Julius Sans One';font-size:30px;font-weight:700">12:43</div><div style="font-family:'Julius Sans One';font-size:18px;margin-top:6px">LIER</div></div>
+                  <div style="font-size:18px;font-weight:700">OP TIJD</div>
+                </div>
+
+                <div style="background:var(--accent);color:#000;border-radius:16px;padding:16px;display:flex;flex-direction:column;justify-content:space-between;box-shadow:0 6px 20px rgba(0,0,0,0.5)">
+                  <div><div style="font-family:'Julius Sans One';font-size:30px;font-weight:700">13:10</div><div style="font-family:'Julius Sans One';font-size:18px;margin-top:6px">BRUSSEL-ZUID</div></div>
+                  <div style="font-size:18px;font-weight:700">+ 5'</div>
+                </div>
+
+                <div style="background:var(--accent);color:#000;border-radius:16px;padding:16px;display:flex;flex-direction:column;justify-content:space-between;box-shadow:0 6px 20px rgba(0,0,0,0.5)">
+                  <div><div style="font-family:'Julius Sans One';font-size:30px;font-weight:700">13:45</div><div style="font-family:'Julius Sans One';font-size:18px;margin-top:6px">GENT-SINT-PIETERS</div></div>
+                  <div style="font-size:18px;font-weight:700">OP TIJD</div>
+                </div>
+
+                <div style="background:var(--accent);color:#000;border-radius:16px;padding:16px;display:flex;flex-direction:column;justify-content:space-between;box-shadow:0 6px 20px rgba(0,0,0,0.5)">
+                  <div><div style="font-family:'Julius Sans One';font-size:30px;font-weight:700">14:05</div><div style="font-family:'Julius Sans One';font-size:18px;margin-top:6px">ANTWERPEN-CENTRAAL</div></div>
+                  <div style="font-size:18px;font-weight:700">OP TIJD</div>
+                </div>
+
+                <div style="background:var(--accent);color:#000;border-radius:16px;padding:16px;display:flex;flex-direction:column;justify-content:space-between;box-shadow:0 6px 20px rgba(0,0,0,0.5)">
+                  <div><div style="font-family:'Julius Sans One';font-size:30px;font-weight:700">14:30</div><div style="font-family:'Julius Sans One';font-size:18px;margin-top:6px">HASSELT</div></div>
+                  <div style="font-size:18px;font-weight:700">+ 7'</div>
+                </div>
+
+              </div> <!-- end grid -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="screen3" class="page" aria-label="Scherm 3 - Wagons">
+      <button class="back" onclick="show('week1')">← Terug naar Week 1</button>
+      <div class="frame">
+        <div class="screen-inner embedded" style="padding:8px">
+          <!-- inhoud Scherm 3 (wagons) -->
+          <div style="display:flex;flex-direction:column;gap:12px;align-items:center;width:100%">
+            <div style="display:flex;justify-content:space-between;align-items:center;width:100%;max-width:1100px">
+              <h2 class="title" style="margin:0">LEUVEN — Perron 3</h2>
+              <div class="screen-clock muted" data-screen="3" style="font-weight:700;font-size:16px;background:rgba(255,255,255,0.05);padding:8px 12px;border-radius:10px;color:var(--muted)">--:--</div>
+            </div>
+
+            <div style="display:flex;flex-wrap:wrap;gap:14px;justify-content:center;width:100%;max-width:1100px">
+              <!-- wagons (kept) -->
+              <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center;width:100%">
+                <div style="background:linear-gradient(90deg,rgba(158,250,30,0.25),rgba(255,255,255,0.03));border:0.12rem solid rgba(255,255,255,0.06);width:13.5rem;min-width:110px;height:10.5rem;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;box-shadow:0 6px 18px rgba(0,0,0,0.35) inset;">
+                  <div style="position:absolute;top:8px;left:8px;background:var(--accent);color:#03110a;font-weight:700;padding:6px 8px;border-radius:8px;font-size:0.85rem">1e klas</div>
+                  <span class="material-symbols-outlined" style="font-size:36px;color:var(--accent)">wheelchair_pickup</span>
+                  <div class="muted" style="margin-top:8px;font-size:14px">Toegankelijk</div>
+                </div>
+
+                <div style="background:rgba(255,255,255,0.03);border:0.12rem solid rgba(255,255,255,0.06);width:13.5rem;min-width:110px;height:10.5rem;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+                  <span class="material-symbols-outlined" style="font-size:36px;color:var(--accent)">wc</span>
+                  <div class="muted" style="margin-top:8px;font-size:14px">WC</div>
+                </div>
+
+                <div style="background:rgba(255,255,255,0.03);border:0.12rem solid rgba(255,255,255,0.06);width:13.5rem;min-width:110px;height:10.5rem;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+                  <span class="material-symbols-outlined" style="font-size:36px;color:var(--accent)">wc</span>
+                  <div class="muted" style="margin-top:8px;font-size:14px">WC</div>
+                </div>
+
+                <div style="background:rgba(255,255,255,0.03);border:0.12rem solid rgba(255,255,255,0.06);width:13.5rem;min-width:110px;height:10.5rem;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+                  <span class="material-symbols-outlined" style="font-size:36px;color:var(--accent)">pedal_bike</span>
+                  <div class="muted" style="margin-top:8px;font-size:14px">Fiets</div>
+                </div>
+
+                <div style="background:rgba(255,255,255,0.03);border:0.12rem solid rgba(255,255,255,0.06);width:13.5rem;min-width:110px;height:10.5rem;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+                  <span class="material-symbols-outlined" style="font-size:36px;color:var(--accent)">volume_off</span>
+                  <div class="muted" style="margin-top:8px;font-size:14px">Stilte</div>
+                </div>
+
+                <div style="background:rgba(255,255,255,0.03);border:0.12rem solid rgba(255,255,255,0.06);width:13.5rem;min-width:110px;height:10.5rem;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+                  <span class="material-symbols-outlined" style="font-size:36px;color:var(--accent)">event_seat</span>
+                  <div class="muted" style="margin-top:8px;font-size:14px">Passagiers</div>
+                </div>
+              </div>
+
+              <!-- route -->
+              <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:center;margin-top:8px;width:100%">
+                <div style="display:flex;align-items:center;gap:8px;color:var(--accent);font-weight:700"><span style="width:12px;height:12px;border-radius:50%;background:var(--accent);display:inline-block"></span>Leuven</div>
+                <div style="display:flex;align-items:center;gap:8px;color:var(--muted)"><span style="width:10px;height:10px;border-radius:50%;background:var(--muted);display:inline-block"></span>Herent</div>
+                <div style="display:flex;align-items:center;gap:8px;color:var(--muted)"><span style="width:10px;height:10px;border-radius:50%;background:var(--muted);display:inline-block"></span>Veltem</div>
+                <div style="display:flex;align-items:center;gap:8px;color:var(--muted)"><span style="width:10px;height:10px;border-radius:50%;background:var(--muted);display:inline-block"></span>Kortenberg</div>
+                <div style="display:flex;align-items:center;gap:8px;color:var(--muted)"><span style="width:10px;height:10px;border-radius:50%;background:var(--muted);display:inline-block"></span>Zaventem</div>
+                <div style="display:flex;align-items:center;gap:8px;color:var(--muted)"><span style="width:10px;height:10px;border-radius:50%;background:var(--muted);display:inline-block"></span>Brussel-Noord</div>
+              </div>
+
+              <!-- weather/footer -->
+              <div style="display:flex;align-items:center;gap:12px;margin-top:10px">
+                <span id="weather-icon-3" class="material-symbols-outlined" style="font-size:28px;color:var(--accent)">partly_cloudy_day</span>
+                <div id="temp-3" style="font-weight:700">--°C</div>
+                <div id="weather-desc-3" class="muted">Laden...</div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </div> <!-- end app -->
+
+<script>
+/* =============
+   Navigation
+   ============= */
+function show(id){
+  // hide all pages
+  document.querySelectorAll('section.page').forEach(s=>s.classList.remove('active'));
+  const sec = document.getElementById(id);
+  if(sec) sec.classList.add('active');
+  updateAllClocks();
+  // reset frames scroll
+  document.querySelectorAll('.frame').forEach(f=>f.scrollTop = 0);
+
+  // if opening onderzoek: ensure slideshow shows current image (preloaded)
+  if(id === 'onderzoek') {
+    // if slideshow initialized, show current; otherwise init will already display when DOM loaded
+    try { slideshow.showCurrent(); } catch(e){ /* ignore */ }
+  }
+}
+
+/* initial */
+document.addEventListener('DOMContentLoaded', ()=>{
+  updateAllClocks();
+
+  // keyboard 'R' only affects screen1 (simulate delays)
+  document.addEventListener('keydown', (e)=>{
+    if(e.key.toLowerCase() === 'r'){
+      const active = document.querySelector('section.page.active');
+      if(active && active.id === 'screen1'){
+        active.querySelectorAll('.status').forEach(s=>{
+          const r = Math.random();
+          if(r < 0.15){
+            s.textContent = 'Vertraagd';
+            s.style.color = 'var(--accent)';
+            s.style.background = 'rgba(158,250,30,0.15)';
+          } else {
+            s.textContent = 'Op tijd';
+            s.style.color = 'var(--accent)';
+            s.style.background = 'rgba(158,250,30,0.08)';
+          }
+        });
+      }
+    }
+
+    // slideshow keyboard navigation when onderzoek open
+    if(document.getElementById('onderzoek').classList.contains('active')) {
+      if(e.key === 'ArrowLeft') slideshow.prev();
+      if(e.key === 'ArrowRight') slideshow.next();
+    }
+  });
+
+  // initialize slideshow (after DOM ready)
+  slideshow.init();
+});
+
+/* =============
+   Clocks
+   ============= */
+function updateAllClocks(){
+  document.querySelectorAll('.screen-clock').forEach(el=>{
+    const now = new Date();
+    el.textContent = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+  });
+}
+setInterval(updateAllClocks, 1000 * 30);
+
+/* =============
+   Weather (screen3)
+   ============= */
+async function fetchWeatherScreen3(){
+  try{
+    const lat = 50.8796, lon = 4.7009;
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`;
+    const res = await fetch(url);
+    const data = await res.json();
+    const cur = data.current_weather || {};
+    const temp = cur.temperature;
+    const wcode = cur.weathercode;
+    const tempEl = document.getElementById('temp-3');
+    const iconEl = document.getElementById('weather-icon-3');
+    const descEl = document.getElementById('weather-desc-3');
+    if(tempEl && temp !== undefined) tempEl.textContent = Math.round(temp) + '°C';
+    const map = {
+      0: ['clear_day','Zonnig'],
+      1: ['clear_day','Overwegend zonnig'],
+      2: ['partly_cloudy_day','Gedeeltelijk bewolkt'],
+      3: ['cloud','Bewolkt'],
+      45:['foggy','Mist'],
+      48:['foggy','Aanvriezende mist'],
+      51:['rainy','Lichte motregen'],53:['rainy','Motregen'],55:['rainy','Zware motregen'],
+      61:['rainy','Lichte regen'],63:['rainy','Regen'],65:['rainy','Zware regen'],
+      71:['weather_snowy','Lichte sneeuw'],73:['weather_snowy','Sneeuw'],75:['weather_snowy','Zware sneeuw'],
+      80:['rainy','Buien'],81:['rainy','Regenbuien'],82:['rainy','Zware buien'],
+      95:['thunderstorm','Onweer'],96:['thunderstorm','Onweer met hagel'],99:['thunderstorm','Hevig onweer']
+    };
+    const entry = map[wcode] || ['partly_cloudy_day','Onbekend'];
+    if(iconEl) iconEl.textContent = entry[0];
+    if(descEl) descEl.textContent = entry[1];
+  }catch(err){
+    const descEl = document.getElementById('weather-desc-3');
+    if(descEl) descEl.textContent = 'Geen weerdata';
+  }
+}
+fetchWeatherScreen3();
+setInterval(fetchWeatherScreen3, 1000 * 60 * 10);
+
+/* =============
+   Custom cursor
+   ============= */
+const cursor = document.getElementById('cursorEl');
+document.addEventListener('mousemove', e=>{
+  cursor.style.left = (e.clientX) + 'px';
+  cursor.style.top = (e.clientY) + 'px';
+});
+document.addEventListener('mouseover', e=>{
+  const t = e.target;
+  if(t.closest('button') || t.closest('a') || t.tagName === 'BUTTON' || t.closest('.btn')){
+    cursor.classList.add('hover');
+  } else {
+    cursor.classList.remove('hover');
+  }
+});
+
+/* Accessibility: keep focus outlines if user tabs */
+document.addEventListener('keydown', (e)=>{
+  if(e.key === 'Tab') document.body.classList.add('show-focus');
+});
+
+/* =============
+   Slideshow logic for Onderzoek (fixed)
+   ============= */
+const slideshow = (function(){
+  // Images in /images folder named image1.jpg ... image9.jpg
+  const images = [
+    'images/image1.jpg',
+    'images/image2.jpg',
+    'images/image3.jpg',
+    'images/image4.jpg',
+    'images/image5.jpg',
+    'images/image6.jpg',
+    'images/image7.jpg',
+    'images/image8.jpg',
+    'images/image9.jpg'
+  ];
+
+  let current = 0;
+
+  // DOM refs will be assigned in init() (after DOMContentLoaded)
+  let photoContainer = null;
+  let thumbsContainer = null;
+  let prevBtn = null;
+  let nextBtn = null;
+  let firstBtn = null;
+  let lastBtn = null;
+
+  // preload & build DOM
+  function init(){
+    // query elements now (DOM is ready)
+    photoContainer = document.getElementById('photoContainer');
+    thumbsContainer = document.getElementById('thumbsContainer');
+    prevBtn = document.getElementById('prevBtn');
+    nextBtn = document.getElementById('nextBtn');
+    firstBtn = document.getElementById('firstBtn');
+    lastBtn = document.getElementById('lastBtn');
+
+    if(!photoContainer || !thumbsContainer) return;
+
+    // clear containers (in case of re-init)
+    photoContainer.innerHTML = '';
+    thumbsContainer.innerHTML = '';
+
+    // create image elements (one per image)
+    images.forEach((src, i) => {
+      const img = document.createElement('img');
+      img.dataset.index = i;
+      img.alt = 'Werkboek pagina ' + (i+1);
+      img.loading = 'lazy';
+      img.src = src;
+      // CSS will position them absolutely; start hidden
+      photoContainer.appendChild(img);
+
+      // thumbnail button
+      const tb = document.createElement('button');
+      tb.title = 'Pagina ' + (i+1);
+      tb.dataset.index = i;
+      const tImg = document.createElement('img');
+      tImg.alt = 'Thumb ' + (i+1);
+      tImg.src = src;
+      tb.appendChild(tImg);
+      tb.addEventListener('click', ()=>goTo(i));
+      thumbsContainer.appendChild(tb);
+    });
+
+    // hook buttons
+    prevBtn && prevBtn.addEventListener('click', prev);
+    nextBtn && nextBtn.addEventListener('click', next);
+    firstBtn && firstBtn.addEventListener('click', ()=>goTo(0));
+    lastBtn && lastBtn.addEventListener('click', ()=>goTo(images.length - 1));
+
+    // show initial
+    updateDisplay();
+
+    // allow swipe on mobile
+    addSwipe(photoContainer);
+  }
+
+  function updateDisplay(){
+    if(!photoContainer || !thumbsContainer) return;
+
+    const imgs = photoContainer.querySelectorAll('img');
+    imgs.forEach(img => {
+      const idx = Number(img.dataset.index);
+      if(idx === current){
+        img.classList.add('visible');
+        img.style.zIndex = 2;
+      } else {
+        img.classList.remove('visible');
+        img.style.zIndex = 1;
+      }
+    });
+
+    thumbsContainer.querySelectorAll('button').forEach(btn => {
+      btn.classList.toggle('active', Number(btn.dataset.index) === current);
+    });
+
+    // ensure the active thumb is visible in the thumbnails scroller
+    const activeThumb = thumbsContainer.querySelector('button.active');
+    if(activeThumb) {
+      const rect = activeThumb.getBoundingClientRect();
+      const parentRect = thumbsContainer.getBoundingClientRect();
+      if(rect.left < parentRect.left || rect.right > parentRect.right) {
+        activeThumb.scrollIntoView({behavior:'smooth', inline:'center'});
+      }
+    }
+  }
+
+  function prev(){
+    current = (current - 1 + images.length) % images.length;
+    updateDisplay();
+  }
+  function next(){
+    current = (current + 1) % images.length;
+    updateDisplay();
+  }
+  function goTo(i){
+    if(typeof i !== 'number') return;
+    current = Math.max(0, Math.min(images.length - 1, i));
+    updateDisplay();
+  }
+  function addSwipe(el){
+    if(!el) return;
+    let startX = 0, startTime = 0;
+    el.addEventListener('touchstart', (ev)=>{
+      startX = ev.touches[0].clientX;
+      startTime = Date.now();
+    }, {passive:true});
+    el.addEventListener('touchend', (ev)=>{
+      const dx = (ev.changedTouches[0].clientX - startX);
+      const dt = Date.now() - startTime;
+      if(Math.abs(dx) > 40 && dt < 600){
+        if(dx < 0) next(); else prev();
+      }
+    });
+  }
+
+  // expose public methods
+  return {
+    init,
+    next,
+    prev,
+    goTo,
+    showCurrent: updateDisplay
+  };
+})();
+
+// initialize slideshow once DOM loaded (this is called from DOMContentLoaded above)
+</script>
+
+</body>
+</html>
